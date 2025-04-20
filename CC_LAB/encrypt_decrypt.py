@@ -4,28 +4,24 @@ import os
 
 # Encrypt the file using AES key
 def encrypt_file(input_file, output_file, key):
-    # Generate a random IV (16 bytes for AES-256)
     iv = os.urandom(16)
 
-    # Initialize cipher
     cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
     encryptor = cipher.encryptor()
 
-    # Read and encrypt the file
     with open(input_file, 'rb') as f:
         plaintext = f.read()
 
     ciphertext = encryptor.update(plaintext) + encryptor.finalize()
 
-    # Write IV + ciphertext to output file
     with open(output_file, 'wb') as f:
         f.write(iv + ciphertext)
 
     print(f"✅ Encrypted file saved to: {output_file}")
 
-# Decrypt the file using AES key
+
 def decrypt_file(input_file, output_file, key):
-    # Read the encrypted file
+
     with open(input_file, 'rb') as f:
         data = f.read()
 
