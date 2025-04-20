@@ -18,8 +18,7 @@ def fullkey(groupId, userId):
     part1 = get_key(groupId, userId)
 
     return join_key(part1, part2)
-
-
+   
 #---------------------------------------------
 
 @app.route('/api/user', methods=['GET'])
@@ -99,6 +98,7 @@ def init_user_in_group():
     try:
         data = request.get_json()
         userId = int(data['userId'])
+        # userPermission = int(data['userPermission'])
         groupId = int(data['groupId'])
         user = userDict[userId]
         group = groupDict[groupId]
@@ -122,9 +122,12 @@ def add_user_to_group():
 
         if not group.user_exists(admin):
             return jsonify({"error": "Admin user not found in group"}), 400
-        
-        if group.user_exists(user):
+        elif not group.user_exists(user):
+            return jsonify({"error": "User not found"}), 400
+        elif group.user_exists(user):
             return jsonify({"error": "User already exists in group"}), 400
+        elif group.get_user_permission(adminId) == 1:
+            return jsonify({"error": "User does not have permission"}), 400
         
         aes_key = fullkey(groupId, adminId)
 
@@ -148,9 +151,13 @@ def generate_key():
 
     data = request.get_json()
     groupId = int(data['groupId'])
+    adminId = int(data['adminId'])
     group = groupDict[groupId]
 
-    for userId in group.aclmap:
+    if group.get_user_permission(adminId) != 3:
+        return jsonify({"error": "User does not have permission"}), 400
+    
+    for userId in group.keymap:
         print("User: ", userId)
         part1, part2 = split_key(aes_key)
         store_key(part1, groupId, userId)
@@ -167,7 +174,8 @@ def encrypt():
     data = request.files['file']
     groupId = request.form.get('groupId')
     userId = request.form.get('userId')
-    #groupID and userID
+    
+    #groupID and userID    
     full_key = fullkey(groupId, userId)
 
     input_file = "input_file.txt"
