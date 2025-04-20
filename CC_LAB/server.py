@@ -5,6 +5,35 @@ import base64
 import os
 from UserEntity import UserEntity
 from GroupEntity import GroupEntity, create_group
+import boto3
+from botocore.exceptions import ClientError
+
+# initialize S3 client once
+s3 = boto3.client(
+    's3',
+    region_name=os.getenv('AWS_REGION'),
+    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+)
+BUCKET = os.getenv('S3_BUCKET')
+
+def upload_to_s3(local_path, object_name):
+    """Uploads a file from local_path to S3://BUCKET/object_name."""
+    try:
+        s3.upload_file(local_path, BUCKET, object_name)
+    except ClientError as e:
+        raise RuntimeError(f"S3 upload failed: {e}")
+    return object_name
+
+def download_from_s3(object_name, local_path):
+    """Downloads S3://BUCKET/object_name to local_path."""
+    try:
+        s3.download_file(BUCKET, object_name, local_path)
+    except ClientError as e:
+        raise RuntimeError(f"S3 download failed: {e}")
+    return local_path
+
+
 
 app = Flask(__name__)
 
