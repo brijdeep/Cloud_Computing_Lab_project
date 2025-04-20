@@ -126,10 +126,7 @@ def add_user_to_group():
         if group.user_exists(user):
             return jsonify({"error": "User already exists in group"}), 400
         
-        adminpart1 = get_key(groupId, adminId)
-        adminpart2 = group.get_user_key(adminId)
-
-        aes_key = join_key(adminpart1, adminpart2)
+        aes_key = fullkey(groupId, adminId)
 
         print("User: ", userId)
         part1, part2 = split_key(aes_key)
