@@ -126,9 +126,17 @@ def add_user_to_group():
         if group.user_exists(user):
             return jsonify({"error": "User already exists in group"}), 400
         
-        original_key = get_key(groupId, adminId)
+        adminpart1 = get_key(groupId, adminId)
+        adminpart2 = group.get_user_key(adminId)
 
-        group.add_user(user, 0)
+        aes_key = join_key(adminpart1, adminpart2)
+
+        print("User: ", userId)
+        part1, part2 = split_key(aes_key)
+        store_key(part1, groupId, userId)
+        group.add_user(user, part2)
+        # group.set_user_key(userId, part2)
+        print("Original key: ", base64.b64encode(join_key(part1, part2)).decode())  
 
         return jsonify(group.to_dict()), 200
     except Exception as e:
