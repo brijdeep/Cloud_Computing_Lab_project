@@ -5,34 +5,8 @@ import base64
 import os
 from UserEntity import UserEntity
 from GroupEntity import GroupEntity, create_group
-import boto3
-from botocore.exceptions import ClientError
-
-# initialize S3 client once
-s3 = boto3.client(
-    's3',
-    region_name=os.getenv('AWS_REGION'),
-    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-)
-BUCKET = os.getenv('S3_BUCKET')
-
-def upload_to_s3(local_path, object_name):
-    """Uploads a file from local_path to S3://BUCKET/object_name."""
-    try:
-        s3.upload_file(local_path, BUCKET, object_name)
-    except ClientError as e:
-        raise RuntimeError(f"S3 upload failed: {e}")
-    return object_name
-
-def download_from_s3(object_name, local_path):
-    """Downloads S3://BUCKET/object_name to local_path."""
-    try:
-        s3.download_file(BUCKET, object_name, local_path)
-    except ClientError as e:
-        raise RuntimeError(f"S3 download failed: {e}")
-    return local_path
-
+from s3_utils import upload_to_s3, download_from_s3  # this should contain your boto3 S3 logic
+from flask import send_file
 
 
 app = Flask(__name__)
@@ -200,44 +174,80 @@ def generate_key():
 # Route to encrypt a file
 @app.route('/encrypt', methods=['POST'])
 def encrypt():
-    data = request.files['file']
-    groupId = request.form.get('groupId')
-    userId = request.form.get('userId')
-    
-    #groupID and userID    
-    full_key = fullkey(groupId, userId)
+    try:
+        uploaded_file = request.files['file']
+        groupId = int(request.form.get('groupId'))
+        userId = int(request.form.get('userId'))
 
-    input_file = "input_file.txt"
-    encrypted_file = "encrypted_file.enc"
+        # Derive full AES key
+        key = fullkey(groupId, userId)
 
-    data.save(input_file)
-    encrypt_file(input_file, encrypted_file, full_key)
+        # File paths
+        input_path = f"uploads/input_{userId}.txt"
+        encrypted_path = f"uploads/encrypted_{userId}.enc"
 
-    return jsonify({
-        "message": "File encrypted successfully!",
-        "encrypted_file": encrypted_file
-    }), 200
+        # Save uploaded file locally
+        uploaded_file.save(input_path)
+
+        # Encrypt file
+        encrypt_file(input_path, encrypted_path, key)
+
+        # Unique S3 key per user/group
+        s3_key = f"encrypted-files/group-{groupId}/user-{userId}.enc"
+
+        # Upload to S3
+        upload_to_s3(encrypted_path, s3_key)
+
+        # Optionally delete local files
+        os.remove(input_path)
+        os.remove(encrypted_path)
+
+        return jsonify({
+            "message": "File encrypted and uploaded successfully!",
+            "s3_key": s3_key
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 
 # Route to decrypt a file
 @app.route('/decrypt', methods=['POST'])
 def decrypt():
-    data = request.files['file']
-    groupId = request.form.get('groupId')
-    userId = request.form.get('userId')
-    #groupID and userID
-    full_key = full_key(groupId, userId)
+    try:
+        groupId = int(request.form.get('groupId'))
+        userId = int(request.form.get('userId'))
+        s3_key = request.form.get('s3_key')
 
-    input_file = "uploaded_encrypted_file.enc"
-    decrypted_file = "decrypted_output.txt"
-    
-    # Save the uploaded encrypted file
-    data.save(input_file)
-    decrypt_file(input_file, decrypted_file, full_key)
+        # Derive full AES key
+        key = fullkey(groupId, userId)
 
-    return jsonify({
-        "message": "File decrypted successfully!",
-        "decrypted_file": decrypted_file
-    }), 200
+        # Local file paths
+        encrypted_path = f"uploads/encrypted_{userId}.enc"
+        decrypted_path = f"uploads/decrypted_{userId}.txt"
+
+        # Download encrypted file from S3
+        download_from_s3(s3_key, encrypted_path)
+
+        # Decrypt
+        decrypt_file(encrypted_path, decrypted_path, key)
+
+        # Optionally delete encrypted file
+        os.remove(encrypted_path)
+
+
+
+        return send_file(decrypted_path, as_attachment=True)
+
+
+        return jsonify({
+            "message": "File decrypted successfully!",
+            "decrypted_file": decrypted_path  # or read content and return if needed
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 
 if __name__ == '__main__':
     app.run(debug=True)
