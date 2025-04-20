@@ -95,7 +95,7 @@ def generate_group():
 #--------------------------------------------
 
 @app.route('/api/init-user-in-group', methods=['POST'])
-def add_user_to_group():
+def init_user_in_group():
     try:
         data = request.get_json()
         userId = int(data['userId'])
